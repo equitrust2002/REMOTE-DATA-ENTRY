@@ -791,16 +791,24 @@
             }
         }
 
-        // ==================== WEBCAM & MESSENGER FUNCTIONS ====================
+        // ==================== WEBCAM & MESSENGER FUNCTIONS (FIXED) ====================
         async function startWebcamFeed() {
             const videoEl = document.getElementById('comms-webcam-video');
             const statusDot = document.getElementById('webcam-status-dot');
+
+            // Secure Context validation check for getUserMedia
+            if (location.protocol !== 'http:' && location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                showToast('Webcam requires HTTP/HTTPS or Localhost. file:// blocks access.', 'error');
+                return;
+            }
+
             try {
                 activeCommsStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 videoEl.srcObject = activeCommsStream;
                 statusDot.className = "w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse";
                 showToast('Webcam and audio feed active', 'success');
             } catch(err) {
+                statusDot.className = "w-2.5 h-2.5 rounded-full bg-rose-500";
                 showToast('Webcam access error: ' + err.message, 'error');
             }
         }
@@ -860,6 +868,8 @@
             const otherUsers = users.filter(u => u.username !== activeUser);
             if(otherUsers.length === 0) {
                 select.innerHTML = `<option value="">No other users available</option>`;
+                selectedChatRecipient = null;
+                document.getElementById('active-chat-user-label').innerText = `No chat recipient`;
                 return;
             }
 
@@ -870,12 +880,12 @@
                 select.appendChild(opt);
             });
 
-            if(otherUsers.length > 0) {
+            if(!selectedChatRecipient || !otherUsers.some(u => u.username === selectedChatRecipient)) {
                 selectedChatRecipient = otherUsers[0].username;
-                select.value = selectedChatRecipient;
-                document.getElementById('active-chat-user-label').innerText = `Chatting with @${selectedChatRecipient}`;
-                renderChatMessages();
             }
+            select.value = selectedChatRecipient;
+            document.getElementById('active-chat-user-label').innerText = `Chatting with @${selectedChatRecipient}`;
+            renderChatMessages();
         }
 
         function selectMessengerRecipient(username) {
@@ -888,7 +898,12 @@
             e.preventDefault();
             const input = document.getElementById('messenger-input');
             const text = input.value.trim();
-            if(!text || !selectedChatRecipient) return;
+
+            if(!selectedChatRecipient) {
+                showToast('Please select a chat recipient first.', 'error');
+                return;
+            }
+            if(!text) return;
 
             const newMsg = {
                 id: 'MSG-' + Date.now(),
@@ -907,6 +922,11 @@
         function renderChatMessages() {
             const chatBox = document.getElementById('messenger-chat-box');
             chatBox.innerHTML = '';
+
+            if(!selectedChatRecipient) {
+                chatBox.innerHTML = `<div class="text-center py-12 text-slate-500 font-sans">No recipient selected.</div>`;
+                return;
+            }
 
             const thread = chatMessages.filter(m => 
                 (m.sender === activeUser && m.recipient === selectedChatRecipient) ||
